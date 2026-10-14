@@ -1,0 +1,9 @@
+# Example .pre-commit-config.yaml — put this in the root of your repo.
+# Replace the `repo:` URL with the URL of your clone/fork of agent-hooks.
+repos:
+  - repo: https://github.com/your-fork/agent-hooks
+    rev: v0.1.0
+    hooks:
+      - id: agent-forbidden-patterns
+      - id: agent-secrets-guard
+      - id: agent-no-test-weakening

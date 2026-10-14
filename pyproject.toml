@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-hooks"
+version = "0.1.0"
+description = "Pre-commit hooks that mechanically enforce project rules for AI coding agents — and explain the fix to the agent when they block a commit."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "agent-hooks contributors" }]
+keywords = ["pre-commit", "ai-agents", "claude-code", "codex", "guardrails", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+agent-forbidden-patterns = "agent_hooks.forbidden_patterns:main"
+agent-secrets-guard = "agent_hooks.secrets_guard:main"
+agent-no-test-weakening = "agent_hooks.no_test_weakening:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_hooks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

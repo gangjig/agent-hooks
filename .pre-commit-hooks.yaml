@@ -1,0 +1,29 @@
+# Hook manifest for the pre-commit framework (https://pre-commit.com).
+# Users reference these ids from their .pre-commit-config.yaml.
+- id: agent-forbidden-patterns
+  name: agent-forbidden-patterns
+  description: >-
+    Block staged files that match forbidden-pattern rules from
+    .agent-hooks.yaml, and tell the agent how to fix each match.
+  entry: agent-forbidden-patterns
+  language: python
+  types: [file]
+
+- id: agent-secrets-guard
+  name: agent-secrets-guard
+  description: >-
+    Block commits that add secret-bearing files (.env, *.pem, credentials,
+    keys, ...); secrets are edited by the human, out-of-band.
+  entry: agent-secrets-guard
+  language: python
+  types: [file]
+
+- id: agent-no-test-weakening
+  name: agent-no-test-weakening
+  description: >-
+    Block commits whose staged diff deletes test files, removes test
+    definitions, or adds skip markers.
+  entry: agent-no-test-weakening
+  language: python
+  pass_filenames: false
+  always_run: true

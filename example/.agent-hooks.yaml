@@ -1,0 +1,36 @@
+# Example .agent-hooks.yaml — copy this into the root of your own repo
+# and adapt the rules. Every `message` is written for the agent: when the
+# rule fires, the agent reads the message and fixes its own change.
+
+rules:
+  # All HTTP traffic must go through the shared client (retry + logging).
+  - pattern: 'requests\.get\(|requests\.post\(|urllib\.request\.urlopen'
+    message: >-
+      Do not call HTTP libraries directly. Use the shared client in
+      app/http.py (from app.http import get, post), which adds retries,
+      timeouts, and request logging.
+
+  # Direct database access is banned outside the repository layer.
+  - pattern: 'sqlite3\.connect\(|psycopg2\.connect\('
+    paths: ['src/**']
+    message: >-
+      Do not open database connections here. Go through the repository
+      layer in src/repositories/ so queries stay testable and audited.
+
+  # Debug leftovers never get committed.
+  - pattern: 'console\.log\(|print\(f?"DEBUG'
+    message: >-
+      Remove this debug output before committing. Use the project logger
+      (logging.getLogger(__name__)) for anything that should stay.
+
+secrets:
+  # Extra file patterns to block, on top of the built-in defaults
+  # (.env*, *credentials*, *.pem, *.key, id_rsa*, *secret*).
+  extra_patterns:
+    - '*.token'
+    - 'config/service-account*.json'
+  # Files that match a blocked pattern but are safe to commit
+  # (templates with placeholder values only).
+  allow:
+    - '.env.example'
+    - 'docs/example-credentials.md'
