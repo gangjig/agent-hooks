@@ -6,6 +6,6 @@ corrective instruction addressed to the agent that made the change, so the
 agent can fix its own work and retry.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["__version__"]

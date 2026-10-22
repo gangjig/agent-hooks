@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-hooks"
-version = "0.1.0"
+version = "0.2.0"
 description = "Pre-commit hooks that mechanically enforce project rules for AI coding agents — and explain the fix to the agent when they block a commit."
 readme = "README.md"
 license = { text = "MIT" }
@@ -30,6 +30,7 @@ test = ["pytest>=7"]
 agent-forbidden-patterns = "agent_hooks.forbidden_patterns:main"
 agent-secrets-guard = "agent_hooks.secrets_guard:main"
 agent-no-test-weakening = "agent_hooks.no_test_weakening:main"
+agent-monitoring-integrity = "agent_hooks.monitoring_integrity:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_hooks"]

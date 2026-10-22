@@ -37,6 +37,27 @@ def test_load_rules_and_secrets(tmp_path, monkeypatch):
     assert config.secrets.allow == [".env.example"]
 
 
+def test_load_monitoring_section(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    write(
+        tmp_path,
+        ".agent-hooks.yaml",
+        "monitoring:\n"
+        "  extra_patterns: ['infra/dashboards/**']\n"
+        "  allow: ['docs/monitoring-overview.md']\n",
+    )
+    config = load_config()
+    assert config.monitoring.extra_patterns == ["infra/dashboards/**"]
+    assert config.monitoring.allow == ["docs/monitoring-overview.md"]
+
+
+def test_missing_monitoring_section_defaults_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config = load_config()
+    assert config.monitoring.extra_patterns == []
+    assert config.monitoring.allow == []
+
+
 def test_rule_missing_message_is_a_config_error(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     write(tmp_path, ".agent-hooks.yaml", "rules:\n  - pattern: 'x'\n")

@@ -34,3 +34,13 @@ secrets:
   allow:
     - '.env.example'
     - 'docs/example-credentials.md'
+
+monitoring:
+  # Extra oversight paths to protect, on top of the built-in defaults
+  # (*monitor*, *alert*, *prometheus*, *logging*, evals/**, *grader*, ...).
+  extra_patterns:
+    - 'infra/dashboards/**'
+  # Oversight-matching files that are safe for agents to commit
+  # (documentation about monitoring, not monitoring itself).
+  allow:
+    - 'docs/monitoring-overview.md'

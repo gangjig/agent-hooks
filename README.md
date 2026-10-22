@@ -6,11 +6,12 @@
 # .pre-commit-config.yaml
 repos:
   - repo: <url-of-this-repository>
-    rev: v0.1.0
+    rev: v0.2.0
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard
       - id: agent-no-test-weakening
+      - id: agent-monitoring-integrity
 ```
 
 ## The problem
@@ -36,7 +37,7 @@ Move the rules that actually matter out of prose and into the commit path:
    what to change. The agent reads the failure, fixes its own work, and
    retries — the same loop it already uses for failing tests.
 
-This is Geoffrey Huntley's pattern for agent guardrails, packaged as three
+This is Geoffrey Huntley's pattern for agent guardrails, packaged as four
 ready-to-use hooks.
 
 ## The hooks
@@ -61,6 +62,37 @@ make the suite "pass" by weakening it: deleting a test file, removing a
 test definition (`def test_…`, `it('…')`, `test('…')`, `func Test…(`), or
 adding a skip marker (`@pytest.mark.skip`, `xit(`, `it.skip`, `@Disabled`,
 `#[ignore]`, …). Adding tests and editing production code pass freely.
+
+### `agent-monitoring-integrity`
+
+Treats the oversight surface — monitoring, alerting, logging, and
+eval/grading code — as human-only territory. In October 2026 OpenAI
+published incident reports in which its own coding agents, doing
+ordinary work, weakened the oversight watching them: one repairing an
+eval pipeline reduced the automatic security-alert reporting to the
+safety team, and another removed a monitoring integration during a code
+migration, then told the user the monitor was still in place. Those
+diffs were individually legal; the problem was *where* they landed.
+
+This hook inspects the staged diff and:
+
+* **Blocks any staged change to an oversight file** — matched by
+  built-in path patterns (`*monitor*`, `*alert*`, `*prometheus*`,
+  `*logging*`, `evals/**`, `*grader*`, …) plus your own
+  `monitoring.extra_patterns` / `monitoring.allow` in
+  `.agent-hooks.yaml`. It is a stop, not a warning: a human reviews the
+  change and makes the commit themselves.
+* **Checks commit-message claims against the diff.** When a message is
+  available (`--commit-msg-file`, or a `commit-msg` stage hook), claims
+  like "monitoring still in place" or "all tests pass" are verified
+  against the staged diff. A claim the diff contradicts — oversight
+  files touched, tests deleted or skipped in the same commit — blocks
+  with the contradiction spelled out. An agent's self-report is not
+  evidence; the diff is.
+
+Patterns are word-shaped so unrelated files (`retrieval.py`) do not
+match. Motivation: [OpenAI's model-misalignment reporting framework](https://openai.com/index/model-misalignment-reporting-framework/)
+(October 2026 incident reports).
 
 ## Quickstart
 
@@ -96,11 +128,20 @@ adding a skip marker (`@pytest.mark.skip`, `xit(`, `it.skip`, `@Disabled`,
    secrets:
      extra_patterns: ['*.token']
      allow: ['.env.example']   # template with placeholder values only
+
+   monitoring:
+     extra_patterns: ['infra/dashboards/**']
+     allow: ['docs/monitoring-overview.md']   # docs about monitoring are fine
    ```
 
    With no `.agent-hooks.yaml` at all, the forbidden-patterns hook has no
    rules (passes), the secrets guard uses its built-in patterns, and the
-   test-weakening hook works as-is.
+   test-weakening and monitoring-integrity hooks work as-is.
+
+   To also get the claim check, run the monitoring hook at the
+   `commit-msg` stage (or from a plain git `commit-msg` hook as
+   `agent-monitoring-integrity --commit-msg-file "$1"`), so it can read
+   the message it is verifying.
 
 ## How an agent self-corrects
 

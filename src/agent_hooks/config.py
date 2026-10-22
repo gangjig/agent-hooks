@@ -11,9 +11,13 @@ Config format::
       extra_patterns: ['*.token']
       allow: ['.env.example']
 
+    monitoring:
+      extra_patterns: ['infra/dashboards/**']
+      allow: ['docs/monitoring-overview.md']
+
 A missing config file is not an error: pattern rules default to none,
 the secrets guard falls back to its built-in patterns, and the
-test-weakening hook needs no config at all.
+test-weakening and monitoring-integrity hooks use their built-ins.
 """
 
 from __future__ import annotations
@@ -44,9 +48,16 @@ class SecretsConfig:
 
 
 @dataclass
+class MonitoringConfig:
+    extra_patterns: list[str] = field(default_factory=list)
+    allow: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     rules: list[Rule] = field(default_factory=list)
     secrets: SecretsConfig = field(default_factory=SecretsConfig)
+    monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
 
 
 def find_config(start: Path | None = None) -> Path | None:
@@ -96,4 +107,12 @@ def load_config(path: Path | None = None) -> Config:
         extra_patterns=[str(p) for p in secrets_raw.get("extra_patterns") or []],
         allow=[str(p) for p in secrets_raw.get("allow") or []],
     )
-    return Config(rules=rules, secrets=secrets)
+
+    monitoring_raw = raw.get("monitoring") or {}
+    if not isinstance(monitoring_raw, dict):
+        raise ConfigError(f"{path}: 'monitoring' must be a mapping")
+    monitoring = MonitoringConfig(
+        extra_patterns=[str(p) for p in monitoring_raw.get("extra_patterns") or []],
+        allow=[str(p) for p in monitoring_raw.get("allow") or []],
+    )
+    return Config(rules=rules, secrets=secrets, monitoring=monitoring)

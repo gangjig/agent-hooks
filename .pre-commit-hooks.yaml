@@ -27,3 +27,15 @@
   language: python
   pass_filenames: false
   always_run: true
+
+- id: agent-monitoring-integrity
+  name: agent-monitoring-integrity
+  description: >-
+    Block commits whose staged diff touches monitoring, alerting,
+    logging, or eval/grading files (human review required), and block
+    commit messages that claim oversight is intact or tests pass when
+    the diff contradicts the claim.
+  entry: agent-monitoring-integrity
+  language: python
+  pass_filenames: false
+  always_run: true
