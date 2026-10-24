@@ -6,12 +6,13 @@
 # .pre-commit-config.yaml
 repos:
   - repo: <url-of-this-repository>
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard
       - id: agent-no-test-weakening
       - id: agent-monitoring-integrity
+      - id: agent-skill-scan
 ```
 
 ## The problem
@@ -37,7 +38,7 @@ Move the rules that actually matter out of prose and into the commit path:
    what to change. The agent reads the failure, fixes its own work, and
    retries — the same loop it already uses for failing tests.
 
-This is Geoffrey Huntley's pattern for agent guardrails, packaged as four
+This is Geoffrey Huntley's pattern for agent guardrails, packaged as five
 ready-to-use hooks.
 
 ## The hooks
@@ -93,6 +94,48 @@ This hook inspects the staged diff and:
 Patterns are word-shaped so unrelated files (`retrieval.py`) do not
 match. Motivation: [OpenAI's model-misalignment reporting framework](https://openai.com/index/model-misalignment-reporting-framework/)
 (October 2026 incident reports).
+
+### `agent-skill-scan`
+
+Vets [Agent Skills](https://agentskills.io) — folders of instructions
+plus bundled scripts that an agent loads and follows — before they are
+installed, committed, or run. A skill is a supply-chain surface:
+security researchers have already catalogued hundreds of published
+skills carrying high-impact malicious payloads, while the standard's
+own reference validator (`skills-ref`) checks only the shallowest
+format rules. This scanner checks two layers:
+
+* **Spec conformance** — the frontmatter rules as written in the
+  [specification](https://agentskills.io/specification), and stricter
+  than the reference validator where the spec text is unambiguous: an
+  empty `compatibility` (spec: 1–500 characters if provided) and a
+  YAML-list `allowed-tools` (spec: a space-separated *string*) both
+  pass `skills-ref` today and are errors here. Covers required fields,
+  name rules (length, case, hyphenation, directory match), field
+  types, unknown fields, and body length. Where an upstream spec
+  question is genuinely open (non-string `metadata` values), the
+  finding is a warning, not an error, and says why.
+* **Safety** — bundled scripts are scanned for download-and-execute
+  pipes, decode-and-exec obfuscation, credential-store access,
+  destructive commands, and persistence/privilege moves; the
+  instruction text (SKILL.md body and references) is scanned for
+  instruction-layer attacks: orders to ignore the operator's
+  instructions, to conceal actions from the user, or to exfiltrate
+  data, plus `allowed-tools` entries requesting unrestricted shell.
+
+Run it as a pre-commit hook (it triggers on `SKILL.md` files) or
+standalone against any skill directory — or a directory full of them:
+
+```bash
+agent-skill-scan ./skills/ --format json   # or text (default)
+```
+
+Exit 1 on any error-severity finding; warnings are reported without
+failing. Reviewed-and-pinned skill directories can be skipped with
+`skills.allow` in `.agent-hooks.yaml`. Motivation: Anthropic's
+donation of the Agent Skills standard to the
+[Agentic AI Foundation](https://aaif.io) (October 2026) and the
+foundation's skills-security roadmap.
 
 ## Quickstart
 

@@ -39,3 +39,15 @@
   language: python
   pass_filenames: false
   always_run: true
+
+- id: agent-skill-scan
+  name: agent-skill-scan
+  description: >-
+    Vet Agent Skills being added to the repo: check SKILL.md
+    frontmatter against the Agent Skills specification and scan
+    bundled scripts and instructions for dangerous patterns
+    (download-and-execute, credential access, concealment or
+    exfiltration instructions, unrestricted tool requests).
+  entry: agent-skill-scan
+  language: python
+  files: SKILL\.md$

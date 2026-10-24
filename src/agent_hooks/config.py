@@ -15,6 +15,9 @@ Config format::
       extra_patterns: ['infra/dashboards/**']
       allow: ['docs/monitoring-overview.md']
 
+    skills:
+      allow: ['vendor/skills/**']
+
 A missing config file is not an error: pattern rules default to none,
 the secrets guard falls back to its built-in patterns, and the
 test-weakening and monitoring-integrity hooks use their built-ins.
@@ -54,10 +57,16 @@ class MonitoringConfig:
 
 
 @dataclass
+class SkillsConfig:
+    allow: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     rules: list[Rule] = field(default_factory=list)
     secrets: SecretsConfig = field(default_factory=SecretsConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
+    skills: SkillsConfig = field(default_factory=SkillsConfig)
 
 
 def find_config(start: Path | None = None) -> Path | None:
@@ -115,4 +124,11 @@ def load_config(path: Path | None = None) -> Config:
         extra_patterns=[str(p) for p in monitoring_raw.get("extra_patterns") or []],
         allow=[str(p) for p in monitoring_raw.get("allow") or []],
     )
-    return Config(rules=rules, secrets=secrets, monitoring=monitoring)
+
+    skills_raw = raw.get("skills") or {}
+    if not isinstance(skills_raw, dict):
+        raise ConfigError(f"{path}: 'skills' must be a mapping")
+    skills = SkillsConfig(
+        allow=[str(p) for p in skills_raw.get("allow") or []],
+    )
+    return Config(rules=rules, secrets=secrets, monitoring=monitoring, skills=skills)

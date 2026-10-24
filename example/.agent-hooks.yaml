@@ -44,3 +44,9 @@ monitoring:
   # (documentation about monitoring, not monitoring itself).
   allow:
     - 'docs/monitoring-overview.md'
+
+skills:
+  # Skill directories agent-skill-scan skips entirely (vendored skills
+  # you have reviewed by hand and pinned, for example).
+  allow:
+    - 'vendor/skills/**'

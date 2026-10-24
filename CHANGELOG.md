@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.0 — 2026-10-24
+
+- New hook/CLI `agent-skill-scan`: vets Agent Skills before they are
+  installed or loaded. (1) Spec conformance against the Agent Skills
+  specification, stricter than the reference validator where the spec
+  is unambiguous — an empty `compatibility` and a YAML-list
+  `allowed-tools` are errors (both pass `skills-ref` today); non-string
+  `metadata` values are a warning, as that spec question is open
+  upstream. (2) Safety scanning of bundled scripts (download-and-
+  execute, decode-and-exec, credential-store access, destructive
+  commands, persistence/privilege) and of the instruction text itself
+  (override, concealment, and exfiltration instructions; unrestricted
+  `allowed-tools` requests). Runs as a pre-commit hook on `SKILL.md`
+  files or standalone (`--format text|json`); reviewed skill
+  directories can be allow-listed under `skills.allow` in
+  `.agent-hooks.yaml`.
+
 ## v0.2.0 — 2026-10-22
 
 - New hook `agent-monitoring-integrity`: blocks any staged change to
