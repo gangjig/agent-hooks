@@ -30,6 +30,30 @@ ever loads it:
   user, or to exfiltrate data — plus ``allowed-tools`` entries that
   request unrestricted shell access.
 
+Three downgrade rules keep the safety layer honest on real-world
+skills (tuned against the official ``anthropics/skills`` examples,
+whose docs are full of attack illustrations and API examples). Each
+downgrades an error to a *warning with the reason stated* — nothing is
+silently dropped:
+
+* **Destination-aware exfiltration.** A send/post instruction aimed at
+  a host the skill itself documents elsewhere (its own API's base URL,
+  named on lines that are not themselves exfiltration-shaped) is a
+  warning. A destination that appears *only* in the send instruction
+  stays an error.
+* **Negation context.** Override/concealment phrases inside an
+  anti-pattern list ("ways this goes wrong", "avoid override-style
+  language (\"ignore what the user said\")") are quoted prohibitions,
+  not orders — a warning. The same phrase as a bare instruction stays
+  an error.
+* **Inert context.** Credential/persistence/destructive patterns on
+  comment lines in scripts, and persistence patterns in Markdown
+  (install docs legitimately show ``sudo``), are warnings. Live code
+  and agent-directed instructions keep full error severity, and
+  whole-environment iteration in scripts (``os.environ.items()`` —
+  often benign subprocess filtering) is its own warning-level check,
+  ``env-dump``, separate from credential-store access.
+
 Usage: ``agent-skill-scan [PATH ...] [--format text|json]``. A path may
 be a skill directory, a ``SKILL.md`` file, or a directory whose
 immediate subdirectories are skills. Exit 1 when any error-severity
@@ -100,65 +124,112 @@ def _rx(pattern: str) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE)
 
 
-SCRIPT_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+# Pattern tuple: (check id, regex, message, base severity).
+SCRIPT_PATTERNS: list[tuple[str, re.Pattern[str], str, str]] = [
     (
         "download-pipe-shell",
         _rx(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh|dash|python\d*|perl|ruby|node)\b"),
         "downloads remote content and pipes it straight into an interpreter; "
         "the fetched bytes are unreviewed code — vendor the script or pin and verify it instead",
+        ERROR,
     ),
     (
         "download-exec",
         _rx(r"(\bsh\s+-c\s+[\"']?\$\(\s*(curl|wget)|\b(iex|invoke-expression)\b[^\\n]*\b(downloadstring|download|invoke-webrequest|invoke-restmethod)|\bexec\s*\([^)]*(urlopen|requests\.get|fetch\())"),
         "executes content fetched from the network at runtime; "
         "the executed code is whatever the server returns today, not what was reviewed",
+        ERROR,
     ),
     (
         "decode-and-execute",
         _rx(r"(base64\s+(-d|--decode|-D)\b[^|\n]*\|\s*(sh|bash|zsh))|(\b(b64decode|atob)\s*\([^)]*\)[^\\n]{0,80}\b(exec|eval)\b)|(\b(exec|eval)\s*\([^)]*\b(b64decode|atob)\b)"),
         "decodes obfuscated content and executes it; "
         "base64 is not encryption — decode it, ship the plain code, and let reviewers read it",
+        ERROR,
     ),
     (
         "credential-access",
-        _rx(r"(~|\$HOME|%USERPROFILE%)[/\\]\.(ssh|aws|gnupg|azure|kube)\b|\bid_(rsa|ed25519|ecdsa|dsa)\b|[/\\]\.netrc\b|\bprintenv\b(?!\s+\w)|\b(os\.environ\b[^\\n]{0,60}\b(items|keys|values)\s*\()"),
-        "touches credential stores or dumps the whole environment; "
+        _rx(r"(~|\$HOME|%USERPROFILE%)[/\\]\.(ssh|aws|gnupg|azure|kube)\b|\bid_(rsa|ed25519|ecdsa|dsa)\b|[/\\]\.netrc\b"),
+        "touches credential stores (ssh/aws/gnupg keys, .netrc); "
         "a skill should name the single secret it needs and read only that",
+        ERROR,
+    ),
+    (
+        "env-dump",
+        _rx(r"\bprintenv\b(?!\s+\w)|\b(os\.environ\b[^\\n]{0,60}\b(items|keys|values)\s*\()"),
+        "iterates or prints the whole process environment; often benign "
+        "(filtering env for a subprocess) but confirm it is never printed, logged, or sent anywhere",
+        WARNING,
     ),
     (
         "destructive-command",
         _rx(r"\brm\s+-[a-z]*r[a-z]*f[a-z]*\s+(/|~/|~|\$HOME|/\*)(\s|$)|(\bmkfs\b|\bdd\b[^\\n]*\bof=/dev/|:()\s*{\s*:\|:&\s*};:)"),
         "contains a destructive command aimed at the filesystem root, the "
         "home directory, or a raw device; skills must scope deletions to their own work area",
+        ERROR,
     ),
     (
         "persistence-or-privilege",
         _rx(r"(\bcrontab\s+-|\bsudo\s+\w|>>?\s*~?/\.?(bashrc|zshrc|profile|bash_profile)\b|\blaunchctl\s+(load|bootstrap)|\bsystemctl\s+(enable|start)|\bchmod\s+(-R\s+)?(777|a\+rwx))"),
         "installs persistence (cron, shell profile, service) or escalates "
         "privilege; a skill runs inside a task, it does not move into the machine",
+        ERROR,
     ),
 ]
 
-INSTRUCTION_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+INSTRUCTION_PATTERNS: list[tuple[str, re.Pattern[str], str, str]] = [
     (
         "instruction-override",
         _rx(r"\b(ignore|disregard|forget|override)\b[^.\n]{0,50}\b(previous|prior|above|system|operator|developer|original)\b[^.\n]{0,30}\b(instruction|prompt|rule|message)s?\b"),
         "instructs the agent to ignore or override the operator's own "
         "instructions; a skill extends the agent's orders, it never outranks them",
+        ERROR,
     ),
     (
         "concealment",
         _rx(r"\b(do not|don't|never|must not)\b[^.\n]{0,40}\b(tell|inform|notify|mention to|reveal to|disclose to|report to)\b[^.\n]{0,30}\b(the )?(user|operator|human|owner)\b|\bwithout\s+(telling|informing|notifying|asking)\b[^.\n]{0,30}\b(the )?(user|operator|human|owner)\b|\bhide\b[^.\n]{0,30}\bfrom\b[^.\n]{0,20}\b(the )?(user|operator|human|owner)\b"),
         "instructs the agent to conceal its actions from the user; "
         "legitimate steps survive daylight — remove the secrecy, keep the step",
+        ERROR,
     ),
     (
         "exfiltration",
         _rx(r"\b(send|upload|post|forward|transmit|email|exfiltrate)\b[^.\n]{0,80}(https?://|[\w.+-]+@[\w-]+\.[\w.]+)|\b(send|upload|forward|transmit|exfiltrate)\b[^.\n]{0,60}\b(the user's|user's|their|all)\b[^.\n]{0,30}\b(files?|documents?|conversation|history|data|contents?|credentials?|tokens?|keys?)\b[^.\n]{0,30}\bto\b"),
         "instructs the agent to send data to an outside destination; "
         "a skill's outputs belong to the user — name the destination and get consent in the open",
+        ERROR,
     ),
 ]
+
+# Checks whose severity drops to WARNING on comment lines in scripts and
+# (for persistence) in Markdown: the text describes or documents the
+# hazard rather than performing it.
+COMMENT_DOWNGRADE_CHECKS = {"credential-access", "destructive-command", "persistence-or-privilege"}
+MD_DOWNGRADE_CHECKS = {"persistence-or-privilege"}
+
+# Markers that a passage is *prohibiting* the matched behaviour (an
+# anti-pattern list, a style warning), not ordering it.
+CONTEXT_MARKERS = _rx(
+    r"anti-?pattern|pitfalls?|failure modes?|red flags?|what not to do|"
+    r"go(es)? wrong|tend to go wrong|mistakes to avoid|don'?ts\b"
+)
+INLINE_NEGATION_MARKERS = _rx(
+    r"\b(avoid|never (use|say)|don'?t (use|say)|do not (use|say)|instead of|not commands)\b"
+)
+
+HOST_RX = re.compile(r"https?://([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})")
+EMAIL_RX = re.compile(r"[\w.+-]+@([\w-]+\.[\w.]+)")
+
+
+def _hosts_in(line: str) -> set[str]:
+    return {h.lower() for h in HOST_RX.findall(line)} | {
+        h.lower() for h in EMAIL_RX.findall(line)
+    }
+
+
+def _is_comment_line(line: str) -> bool:
+    stripped = line.lstrip()
+    return stripped.startswith(("#", "//", "/*", "*", '"""', "'''"))
 
 
 # ---------------------------------------------------------------------------
@@ -274,21 +345,65 @@ def _check_allowed_tools(meta: dict, rel: str, out: list[Finding]) -> None:
 # Content checks
 
 
-def _scan_lines(
-    path: Path,
+EXFIL_RX = dict((check, rx) for check, rx, _, _ in INSTRUCTION_PATTERNS)["exfiltration"]
+
+
+def _declared_hosts(texts: list[str]) -> set[str]:
+    """Hosts a skill documents on lines that are not themselves
+    exfiltration-shaped — its own API's base URL, in practice."""
+    hosts: set[str] = set()
+    for text in texts:
+        for line in text.splitlines():
+            if not EXFIL_RX.search(line):
+                hosts |= _hosts_in(line)
+    return hosts
+
+
+def _scan_text(
     rel: str,
-    patterns: list[tuple[str, re.Pattern[str], str]],
+    lines: list[str],
+    patterns: list[tuple[str, re.Pattern[str], str, str]],
     out: list[Finding],
+    *,
+    kind: str,
+    declared_hosts: set[str] | None = None,
+    line_offset: int = 0,
 ) -> None:
-    try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return
-    for lineno, line in enumerate(lines, 1):
-        for check, rx, message in patterns:
-            if rx.search(line):
-                out.append(Finding(ERROR, check, rel, message, line=lineno))
-                break
+    """Scan text lines, applying the downgrade rules from the docstring."""
+    declared_hosts = declared_hosts or set()
+    for idx, line in enumerate(lines):
+        lineno = idx + 1 + line_offset
+        for check, rx, message, severity in patterns:
+            match = rx.search(line)
+            if not match:
+                continue
+            note = ""
+            if severity == ERROR and check == "exfiltration":
+                hosts = _hosts_in(line)
+                if hosts and hosts <= declared_hosts:
+                    severity = WARNING
+                    note = (" (destination is documented elsewhere in this "
+                            "skill — likely its own API; downgraded to a warning)")
+            if severity == ERROR and check in ("instruction-override", "concealment"):
+                before = line[: match.start()]
+                context = "\n".join(lines[max(0, idx - 5) : idx])
+                if (
+                    INLINE_NEGATION_MARKERS.search(before)
+                    or CONTEXT_MARKERS.search(context)
+                    or "❌" in line
+                ):
+                    severity = WARNING
+                    note = (" (reads as a prohibition or quoted anti-pattern, "
+                            "not an instruction; downgraded to a warning)")
+            if severity == ERROR and kind == "script" and _is_comment_line(line) \
+                    and check in COMMENT_DOWNGRADE_CHECKS:
+                severity = WARNING
+                note = " (on a comment line — describes the hazard rather than performing it)"
+            if severity == ERROR and kind == "md" and check in MD_DOWNGRADE_CHECKS:
+                severity = WARNING
+                note = " (in documentation; install/setup prose often shows privileged commands)"
+            out.append(Finding(severity, check, rel, message + note, line=lineno))
+            break
 
 
 def scan_skill(skill_dir: Path) -> list[Finding]:
@@ -319,28 +434,38 @@ def scan_skill(skill_dir: Path) -> list[Finding]:
 
     # Instruction-layer patterns apply to every Markdown file (the body
     # and anything under references/); script patterns to script files.
-    # Credential/destructive/persistence script patterns also apply to
-    # Markdown: instructions that tell the agent to run a destructive
+    # Credential/env/destructive/persistence script patterns also apply
+    # to Markdown: instructions that tell the agent to run a destructive
     # command are the same hazard with one more step.
-    script_like = SCRIPT_PATTERNS
+    md_patterns = INSTRUCTION_PATTERNS + SCRIPT_PATTERNS[3:]
+
+    # First pass: read every scannable file once, and collect the hosts
+    # the skill documents outside exfiltration-shaped lines.
+    file_texts: dict[Path, str] = {}
     for path in sorted(skill_dir.rglob("*")):
         if not path.is_file() or path == skill_md:
             continue
+        if path.suffix.lower() in SCRIPT_SUFFIXES or path.suffix.lower() == ".md":
+            try:
+                file_texts[path] = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+    declared = _declared_hosts([text, *file_texts.values()])
+
+    for path, ftext in file_texts.items():
         rel = f"{rel_root}/{path.relative_to(skill_dir).as_posix()}"
         if path.suffix.lower() in SCRIPT_SUFFIXES:
-            _scan_lines(path, rel, script_like, out)
-        elif path.suffix.lower() == ".md":
-            _scan_lines(path, rel, INSTRUCTION_PATTERNS + script_like[3:], out)
+            _scan_text(rel, ftext.splitlines(), SCRIPT_PATTERNS, out,
+                       kind="script", declared_hosts=declared)
+        else:
+            _scan_text(rel, ftext.splitlines(), md_patterns, out,
+                       kind="md", declared_hosts=declared)
     if meta is not None:
         # Line numbers are reported against the whole SKILL.md, so add
         # back the lines the frontmatter occupied.
         offset = text[: len(text) - len(body)].count("\n")
-        for lineno, line in enumerate(body.splitlines(), 1):
-            for check, rx, message in INSTRUCTION_PATTERNS + script_like[3:]:
-                if rx.search(line):
-                    out.append(Finding(ERROR, check, rel_md, message,
-                                       line=lineno + offset))
-                    break
+        _scan_text(rel_md, body.splitlines(), md_patterns, out,
+                   kind="md", declared_hosts=declared, line_offset=offset)
     return out
 
 

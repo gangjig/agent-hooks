@@ -6,7 +6,7 @@
 # .pre-commit-config.yaml
 repos:
   - repo: <url-of-this-repository>
-    rev: v0.3.0
+    rev: v0.3.1
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard
@@ -131,8 +131,20 @@ agent-skill-scan ./skills/ --format json   # or text (default)
 ```
 
 Exit 1 on any error-severity finding; warnings are reported without
-failing. Reviewed-and-pinned skill directories can be skipped with
-`skills.allow` in `.agent-hooks.yaml`. Motivation: Anthropic's
+failing. Three downgrade rules keep the safety layer honest on
+real-world skills (tuned against the official `anthropics/skills`
+examples): exfiltration aimed at a host the skill itself documents —
+its own API — is a warning, while an undocumented destination stays an
+error; override/concealment phrases inside anti-pattern lists are
+quoted prohibitions, not orders (warning); credential/persistence
+patterns on script comment lines, and persistence patterns in
+documentation prose, are likewise warnings with the reason stated.
+Nothing is silently dropped — every downgrade is printed as a warning.
+On the official examples this tuning takes error findings from 31 to
+exactly 1: the one genuine violation in the set (a `description` over
+the spec's 1024-character limit). Reviewed-and-pinned skill
+directories can be skipped with `skills.allow` in
+`.agent-hooks.yaml`. Motivation: Anthropic's
 donation of the Agent Skills standard to the
 [Agentic AI Foundation](https://aaif.io) (October 2026) and the
 foundation's skills-security roadmap.

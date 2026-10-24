@@ -2,7 +2,7 @@
 # Replace the `repo:` URL with the URL of your clone/fork of agent-hooks.
 repos:
   - repo: https://github.com/your-fork/agent-hooks
-    rev: v0.3.0
+    rev: v0.3.1
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard

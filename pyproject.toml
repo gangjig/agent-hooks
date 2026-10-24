@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-hooks"
-version = "0.3.0"
+version = "0.3.1"
 description = "Pre-commit hooks that mechanically enforce project rules for AI coding agents — and explain the fix to the agent when they block a commit."
 readme = "README.md"
 license = { text = "MIT" }

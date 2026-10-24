@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.1 — 2026-10-24
+
+- `agent-skill-scan` safety-layer tuning, driven by a pilot scan of
+  the official `anthropics/skills` examples (19 skills), where 30 of
+  31 error findings were contextual false positives. Three downgrade
+  rules, each printed as a warning with its reason — nothing is
+  silently dropped: (1) exfiltration is destination-aware — a
+  send/post to a host the skill documents elsewhere (its own API) is
+  a warning, an undocumented destination stays an error; (2)
+  override/concealment phrases in anti-pattern/negation context are
+  warnings; (3) credential/persistence/destructive patterns on script
+  comment lines, and persistence patterns in Markdown prose, are
+  warnings. Whole-environment iteration is split out of
+  `credential-access` into its own warning-level check, `env-dump`.
+  After tuning, the pilot corpus yields exactly 1 error — the genuine
+  one (the `claude-api` example's description exceeds the spec's
+  1024-character limit).
+
 ## v0.3.0 — 2026-10-24
 
 - New hook/CLI `agent-skill-scan`: vets Agent Skills before they are
