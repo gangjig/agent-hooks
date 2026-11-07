@@ -251,6 +251,25 @@ pip install -e ".[test]"
 python -m pytest
 ```
 
+## Build your own
+
+This repository is small enough to regenerate from a prompt. Paste the
+following into an LLM and it should produce a closely similar project:
+
+> Write a set of pre-commit hooks that enforce a project's rules on AI
+> coding agents mechanically, at commit time, instead of trusting the
+> agent to remember prose rules written in a file like AGENTS.md. Each
+> hook checks staged changes for one class of violation (forbidden code
+> patterns, secrets about to be committed, tests weakened to make them
+> pass, tampering with monitoring or evaluation code, and agent skill
+> packages, which are vetted as a supply-chain surface before they are
+> committed) and blocks the commit when it finds one. When a hook
+> blocks, its output is written for the agent rather than for a human:
+> it names the file, the line, the rule, and exactly what to change, so
+> the agent can read the failure, fix its own work, and retry the
+> commit. Package the hooks as a standard pre-commit repository that any
+> project can adopt with a few lines of configuration.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
