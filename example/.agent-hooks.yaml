@@ -50,3 +50,17 @@ skills:
   # you have reviewed by hand and pinned, for example).
   allow:
     - 'vendor/skills/**'
+
+danger_reminder:
+  # Extra dangers for the runtime reminder hook, on top of its built-ins
+  # (DROP TABLE/DATABASE, DELETE/UPDATE without WHERE, TRUNCATE, rm -rf,
+  # git push --force / reset --hard, terraform destroy, kubectl delete,
+  # ...). Each rule names the specific danger and its consequence — the
+  # reminder prints exactly that, never a generic safety tip.
+  rules:
+    - pattern: 'deploy\\.sh\\s+prod'
+      danger: 'this deploys to production'
+      consequence: 'a bad deploy takes the live site down until it is rolled back'
+  # Built-in rules to turn off by id.
+  # disable:
+  #   - reset-hard

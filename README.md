@@ -6,7 +6,7 @@
 # .pre-commit-config.yaml
 repos:
   - repo: <url-of-this-repository>
-    rev: v0.3.1
+    rev: v0.4.0
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard
@@ -39,7 +39,8 @@ Move the rules that actually matter out of prose and into the commit path:
    retries — the same loop it already uses for failing tests.
 
 This is Geoffrey Huntley's pattern for agent guardrails, packaged as five
-ready-to-use hooks.
+ready-to-use pre-commit hooks — plus one runtime hook that reminds the
+agent of the danger it just invoked, right after the tool call returns.
 
 ## The hooks
 
@@ -149,6 +150,85 @@ donation of the Agent Skills standard to the
 [Agentic AI Foundation](https://aaif.io) (October 2026) and the
 foundation's skills-security roadmap.
 
+### `agent-danger-reminder`
+
+A runtime hook, not a commit-time gate: an agent harness runs it after
+each tool call returns (for example as a Claude Code PostToolUse hook)
+and its stdout is inserted into the agent's context. It reads a JSON
+tool-call record — tool name, arguments, and result — and prints one
+short reminder per danger it detects, naming the *specific* danger and
+its consequence:
+
+```text
+Reminder: this command drops the database table "users" — the table and
+all its rows are gone unless a backup exists.
+```
+
+It is silent when nothing dangerous is detected, so a reminder stays
+rare enough to be read, and it never blocks: it always exits 0.
+
+Motivation: the ROGUE-AI study
+([arXiv:2611.26553](https://arxiv.org/abs/2611.26553)) reconstructed
+108 real agent accidents and re-ran them against five frontier models.
+The models repeated the reported harm in 18%–33% of runs — and in 62
+of the 72 accidents that caused real harm there was no attacker at
+all: the agent simply did its job and missed an ordinary danger
+standing next to it. The one intervention that helped across all five
+models was a reminder inserted after each tool result that named the
+specific danger and its consequence; a same-length generic safety tip
+did not help. This hook is that intervention.
+
+Built-in rules cover destructive database statements (`DROP TABLE`,
+`DROP DATABASE`, `TRUNCATE`, `DELETE`/`UPDATE` with no `WHERE`),
+recursive deletes (`rm -rf`), history-rewriting git commands
+(`push --force`, `reset --hard`), and infrastructure destruction
+(`terraform destroy`, `kubectl delete`, `helm uninstall`, ...). Your
+own dangers go in `.agent-hooks.yaml`:
+
+```yaml
+danger_reminder:
+  rules:
+    - pattern: 'deploy\\.sh\\s+prod'
+      danger: 'this deploys to production'
+      consequence: 'a bad deploy takes the live site down until it is rolled back'
+    - pattern: 'psql.*prod'
+      tool: 'Bash'
+      danger: 'this opens a shell on the production database'
+      consequence: 'any statement you run here acts on live user data'
+  disable:
+    - reset-hard   # this repo never has uncommitted work worth protecting
+```
+
+Rules match against the tool name, its arguments, and its result. A
+rule's `danger` and `consequence` may name the matched text with
+`{match}` or a named regex group (`{table}`, ...). `tool` scopes a
+rule to one tool (a regex on the tool name); `unless` is a regex that
+suppresses the rule when it also matches — that is how the built-in
+`DELETE` rule stays silent when the statement has a `WHERE` clause.
+
+Wire it into Claude Code in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{ "type": "command", "command": "agent-danger-reminder" }]
+      }
+    ]
+  }
+}
+```
+
+Or run it by hand:
+
+```bash
+echo '{"tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/x"}}' \
+  | agent-danger-reminder
+agent-danger-reminder --format json < record.json   # {"reminders": [...]}
+```
+
 ## Quickstart
 
 1. Install pre-commit and the hooks:
@@ -187,6 +267,12 @@ foundation's skills-security roadmap.
    monitoring:
      extra_patterns: ['infra/dashboards/**']
      allow: ['docs/monitoring-overview.md']   # docs about monitoring are fine
+
+   danger_reminder:
+     rules:
+       - pattern: 'deploy\\.sh\\s+prod'
+         danger: 'this deploys to production'
+         consequence: 'a bad deploy takes the live site down until it is rolled back'
    ```
 
    With no `.agent-hooks.yaml` at all, the forbidden-patterns hook has no
@@ -250,6 +336,8 @@ through — no human involved, and the rule held 10 times out of 10.
 pip install -e ".[test]"
 python -m pytest
 ```
+
+The suite has 128 tests.
 
 ## Build your own
 

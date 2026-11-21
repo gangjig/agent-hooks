@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.0 — 2026-11-21
+
+- New runtime hook/CLI `agent-danger-reminder`: an agent harness runs
+  it after each tool call returns (for example a Claude Code
+  PostToolUse hook) and its stdout is inserted into the agent's
+  context. It reads a JSON tool-call record (tool name, arguments,
+  result) and prints one short reminder per danger detected, naming
+  the *specific* danger and its consequence — never a generic safety
+  tip. Built-in rules cover destructive database statements (`DROP
+  TABLE`/`DROP DATABASE`, `TRUNCATE`, `DELETE`/`UPDATE` with no
+  `WHERE`), recursive deletes (`rm -rf`), history-rewriting git
+  commands (`push --force`, `reset --hard`), and infrastructure
+  destruction (`terraform destroy`, `kubectl delete`, `helm
+  uninstall`, ...). Custom rules live under `danger_reminder.rules`
+  in `.agent-hooks.yaml` (with optional `tool` scoping and `unless`
+  suppression); built-ins can be turned off by id under
+  `danger_reminder.disable`. The hook is silent when nothing
+  dangerous is detected and always exits 0 — it reminds, it does
+  not gate. Motivated by the ROGUE-AI study (arXiv:2611.26553), in
+  which reminders naming the specific danger and consequence reduced
+  harmful behavior across all five models tested, while same-length
+  generic reminders did not help.
+
 ## v0.3.1 — 2026-10-24
 
 - `agent-skill-scan` safety-layer tuning, driven by a pilot scan of

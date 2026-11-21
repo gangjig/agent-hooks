@@ -18,9 +18,21 @@ Config format::
     skills:
       allow: ['vendor/skills/**']
 
+    danger_reminder:
+      rules:
+        - pattern: 'deploy\\.sh\\s+prod'
+          danger: 'this deploys to production'
+          consequence: 'a bad deploy takes the live site down until it is rolled back'
+        - pattern: 'psql.*prod'
+          tool: 'Bash'
+          danger: 'this opens a shell on the production database'
+          consequence: 'any statement you run here acts on live user data'
+      disable: ['reset-hard']
+
 A missing config file is not an error: pattern rules default to none,
 the secrets guard falls back to its built-in patterns, and the
 test-weakening and monitoring-integrity hooks use their built-ins.
+The danger reminder likewise falls back to its built-in rules.
 """
 
 from __future__ import annotations
@@ -62,11 +74,27 @@ class SkillsConfig:
 
 
 @dataclass
+class DangerRule:
+    pattern: str
+    danger: str
+    consequence: str
+    tool: str = ""
+    unless: str = ""
+
+
+@dataclass
+class DangerReminderConfig:
+    rules: list[DangerRule] = field(default_factory=list)
+    disable: list[str] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     rules: list[Rule] = field(default_factory=list)
     secrets: SecretsConfig = field(default_factory=SecretsConfig)
     monitoring: MonitoringConfig = field(default_factory=MonitoringConfig)
     skills: SkillsConfig = field(default_factory=SkillsConfig)
+    danger_reminder: DangerReminderConfig = field(default_factory=DangerReminderConfig)
 
 
 def find_config(start: Path | None = None) -> Path | None:
@@ -131,4 +159,36 @@ def load_config(path: Path | None = None) -> Config:
     skills = SkillsConfig(
         allow=[str(p) for p in skills_raw.get("allow") or []],
     )
-    return Config(rules=rules, secrets=secrets, monitoring=monitoring, skills=skills)
+
+    danger_raw = raw.get("danger_reminder") or {}
+    if not isinstance(danger_raw, dict):
+        raise ConfigError(f"{path}: 'danger_reminder' must be a mapping")
+    danger_rules: list[DangerRule] = []
+    for i, item in enumerate(danger_raw.get("rules") or []):
+        if not isinstance(item, dict) or not all(
+            k in item for k in ("pattern", "danger", "consequence")
+        ):
+            raise ConfigError(
+                f"{path}: danger_reminder.rules[{i}] must have 'pattern', "
+                f"'danger', and 'consequence' keys"
+            )
+        danger_rules.append(
+            DangerRule(
+                pattern=str(item["pattern"]),
+                danger=str(item["danger"]),
+                consequence=str(item["consequence"]),
+                tool=str(item.get("tool") or ""),
+                unless=str(item.get("unless") or ""),
+            )
+        )
+    danger_reminder = DangerReminderConfig(
+        rules=danger_rules,
+        disable=[str(d) for d in danger_raw.get("disable") or []],
+    )
+    return Config(
+        rules=rules,
+        secrets=secrets,
+        monitoring=monitoring,
+        skills=skills,
+        danger_reminder=danger_reminder,
+    )
