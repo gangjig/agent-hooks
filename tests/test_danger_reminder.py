@@ -169,6 +169,20 @@ def test_parse_claude_code_post_tool_use_shape():
     assert "DROP TABLE" in call.text
 
 
+def test_parse_dict_input_leaves_no_json_punctuation_in_target():
+    # Regression: tool_input as a dict used to be json.dumps'd, so the
+    # rm-recursive rule captured '/tmp/build"}' as its target.
+    call = parse_record(
+        {"tool_name": "Bash", "tool_input": {"command": "rm -rf /tmp/build"}}
+    )
+    assert "{" not in call.text and "}" not in call.text
+    texts = _texts(find_reminders(call, Config()))
+    assert texts == [
+        "Reminder: this command recursively deletes /tmp/build"
+        " — deleted files cannot be recovered unless a backup exists."
+    ]
+
+
 def test_parse_plain_variants():
     call = parse_record(
         {"tool": "Bash", "command": "rm -rf /x", "output": "done"}

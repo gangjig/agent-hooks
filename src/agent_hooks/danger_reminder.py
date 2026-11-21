@@ -151,6 +151,13 @@ def _as_text(value: object) -> str:
         return ""
     if isinstance(value, str):
         return value
+    if isinstance(value, dict):
+        # Flatten to the leaf values, not JSON: dumping the dict would
+        # leave braces/quotes in the searchable text, so a rule like
+        # rm-recursive would capture "/tmp/build\"}" as the target.
+        return " ".join(_as_text(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return " ".join(_as_text(v) for v in value)
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
