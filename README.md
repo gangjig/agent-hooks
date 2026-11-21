@@ -6,7 +6,7 @@
 # .pre-commit-config.yaml
 repos:
   - repo: <url-of-this-repository>
-    rev: v0.4.0
+    rev: v0.4.1
     hooks:
       - id: agent-forbidden-patterns
       - id: agent-secrets-guard
